@@ -1,0 +1,29 @@
+﻿<UserControl x:Class="Z25023_Mostostal_Cięcie.UI.StepVisualizerControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:Z25023_Mostostal_Cięcie.UI"
+             mc:Ignorable="d" 
+             Margin="0,0,0,30">
+    <Grid Background="White">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock x:Name="HeaderTextBlock" Grid.Row="0" Margin="10,0,0,15" TextWrapping="Wrap">
+            <Run x:Name="RunTitle" FontWeight="Bold" FontSize="14" Foreground="Black"/>
+            <LineBreak/>
+            <Run x:Name="RunDetails" FontWeight="Bold" FontSize="13" Foreground="#005A9E"/>
+        </TextBlock>
+
+        <Canvas x:Name="DrawingCanvas" Grid.Row="1" Width="6500" Height="250" Background="Transparent" ClipToBounds="True" HorizontalAlignment="Left">
+
+            <Canvas.LayoutTransform>
+                <ScaleTransform ScaleX="0.5" ScaleY="0.5" />
+            </Canvas.LayoutTransform>
+
+        </Canvas>
+    </Grid>
+</UserControl>
