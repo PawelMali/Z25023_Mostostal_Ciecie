@@ -132,6 +132,41 @@
                         </ItemsControl>
                     </ScrollViewer>
                 </TabItem>
+
+                <TabItem Header="Zgeneralizowana Pętla (Algorytm)">
+                    <Grid Background="White" Margin="10">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0" Background="#E6F2FA" BorderBrush="#0078D7" BorderThickness="1" Padding="10" Margin="0,0,0,10">
+                            <TextBlock TextWrapping="Wrap" FontSize="13">
+                                <Run FontWeight="Bold" Foreground="#005A9E" Text="ZGENERALIZOWANY ALGORYTM PRODUKCYJNY: "/>
+                                <Run Text="Poniższa sekwencja kroków to gotowy podprogram. Aby wyprodukować N płaskowników, "/>
+                                <Run FontWeight="Bold" Text="powtarzaj tę tabelę N razy."/>
+                                <LineBreak/>
+                                <Run Text="UWAGA: " Foreground="Red" FontWeight="Bold"/>
+                                <Run Text="Tylko przy pierwszym wykonaniu pętli (start maszyny) użyj wartości z kolumny "/>
+                                <Run FontWeight="Bold" Text="'PRZESUW STARTOWY' "/>
+                                <Run Text="(wynosi 0.00). We wszystkich kolejnych iteracjach używaj wyłącznie kolumny "/>
+                                <Run FontWeight="Bold" Text="'PRZESUW W PĘTLI'."/>
+                            </TextBlock>
+                        </Border>
+
+                        <DataGrid x:Name="LoopSequenceDataGrid" Grid.Row="1" AutoGenerateColumns="False" IsReadOnly="True" 
+                                  CanUserSortColumns="False" AlternatingRowBackground="#F9F9F9" GridLinesVisibility="Horizontal">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="KROK PĘTLI" Binding="{Binding LoopIndex}" FontWeight="Bold"/>
+                                <DataGridTextColumn Header="PRZESUW W PĘTLI (mm)" Binding="{Binding StandardDisplacement, StringFormat=\{0:F2\}}" Foreground="DarkGreen" FontWeight="Bold"/>
+                                <DataGridTextColumn Header="PRZESUW STARTOWY (mm)" Binding="{Binding StartupDisplacement, StringFormat=\{0:F2\}}" Foreground="Gray"/>
+                                <DataGridCheckBoxColumn Header="CIĘCIE" Binding="{Binding IsCutActive}"/>
+                                <DataGridTextColumn Header="STEMPLE (MASK)" Binding="{Binding PunchesMask}"/>
+                                <DataGridTextColumn Header="INFO" Binding="{Binding Info}"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+                </TabItem>
             </TabControl>
         </Grid>
     </Grid>

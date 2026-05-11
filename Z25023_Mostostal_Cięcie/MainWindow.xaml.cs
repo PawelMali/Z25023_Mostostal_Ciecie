@@ -22,6 +22,7 @@ namespace Z25023_Mostostal_Cięcie
         public MainWindow()
         {
             InitializeComponent();
+
         }
 
         private void RunSimulationButton_Click(object sender, RoutedEventArgs e)
@@ -59,6 +60,9 @@ namespace Z25023_Mostostal_Cięcie
                 int optimalChunks;
                 double optimalKnifePosition = logic.CalculateOptimalKnifePosition(detailConfig, out optimalChunks);
 
+                // Zmienne do przechwycenia "złotego wzorca" (stanu ustalonego)
+                List<SimulationStep> steadyStateSteps = null;
+
                 for (int i = 0; i < 4; i++)
                 {
                     double absoluteX = logic.GetAbsoluteFrontPosition(i, detailConfig);
@@ -66,9 +70,44 @@ namespace Z25023_Mostostal_Cięcie
                     // Przekazujemy zarówno pozycję noża, jak i wymuszoną liczbę podziałów
                     var detailSteps = logic.GenerateStepsForDetail(detailConfig, absoluteX, currentStepNumber, ref currentMachineAbsoluteDelta, optimalKnifePosition, optimalChunks);
 
+                    // KRYTYCZNE: Pobieramy kroki z drugiego detalu (i == 1) jako nasz zgeneralizowany wzorzec
+                    if (i == 1)
+                    {
+                        steadyStateSteps = new List<SimulationStep>(detailSteps);
+                    }
+
                     allSteps.AddRange(detailSteps);
                     currentStepNumber += detailSteps.Count;
                     totalHoles += detailSteps.Sum(s => System.Numerics.BitOperations.PopCount(s.PunchesMask));
+                }
+
+                // ==========================================
+                // GENEROWANIE ZAKŁADKI: ZGENERALIZOWANA PĘTLA
+                // ==========================================
+                if (steadyStateSteps != null)
+                {
+                    var loopSequence = new List<GeneralizedStep>();
+                    for (int j = 0; j < steadyStateSteps.Count; j++)
+                    {
+                        var step = steadyStateSteps[j];
+
+                        // Przesuw standardowy to ten z cyklu ustalonego. 
+                        // Przesuw startowy wymusza 0.0 TYLKO dla pierwszego kroku w pierwszej pętli.
+                        double stdDisp = step.StepDisplacement;
+                        double startDisp = (j == 0) ? 0.0 : stdDisp;
+
+                        loopSequence.Add(new GeneralizedStep(
+                            LoopIndex: j + 1,
+                            StandardDisplacement: stdDisp,
+                            StartupDisplacement: startDisp,
+                            IsCutActive: step.IsCutActive,
+                            PunchesMask: step.PunchesMask,
+                            Info: step.Info
+                        ));
+                    }
+
+                    // Przypisanie do nowej tabeli w interfejsie
+                    LoopSequenceDataGrid.ItemsSource = loopSequence;
                 }
 
                 // 4. Aktualizacja interfejsu użytkownika (UI)
