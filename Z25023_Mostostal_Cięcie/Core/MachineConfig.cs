@@ -14,5 +14,9 @@ public record MachineConfig(
     double Pitch = 33.3,
     double MachineCenterIndex = 15.5,
     int MaxPunches = 32,
-    double PunchWidth = 1.5 // NOWA ZMIENNA: Grubość / szerokość stempla w mm
+    double PunchWidth = 1.5, // NOWA ZMIENNA: Grubość / szerokość stempla w mm
+
+    // NOWE PARAMETRY:
+    bool EnableSerration = true,  // Włącznik trybu progresywnego
+    double SerrationWidth = 5.0   // Szerokość (średnica) stempla seratacji
 );

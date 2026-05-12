@@ -21,7 +21,7 @@
         <Canvas x:Name="DrawingCanvas" Grid.Row="1" Width="6500" Height="250" Background="Transparent" ClipToBounds="True" HorizontalAlignment="Left">
 
             <Canvas.LayoutTransform>
-                <ScaleTransform ScaleX="0.5" ScaleY="0.5" />
+                <ScaleTransform x:Name="CanvasScale" ScaleX="0.5" ScaleY="0.5" />
             </Canvas.LayoutTransform>
 
         </Canvas>

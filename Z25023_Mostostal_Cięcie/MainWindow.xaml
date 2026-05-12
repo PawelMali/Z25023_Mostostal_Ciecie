@@ -36,6 +36,9 @@
                     <ComboBoxItem Content="99.9" />
                 </ComboBox>
 
+                <TextBlock Text="Opcje technologiczne:" Margin="0,15,0,5" FontWeight="SemiBold"/>
+                <CheckBox x:Name="chkEnableSerration" Content="Włącz Seratację (Tryb Progresywny)" IsChecked="True" Margin="0,0,0,15" FontWeight="Bold" Foreground="DarkGreen" />
+
                 <Grid Margin="0,0,0,15">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
@@ -73,6 +76,8 @@
                 <Button Name="RunSimulationButton" Content="URUCHOM SYMULACJĘ" Height="40" 
                         Background="#007ACC" Foreground="White" FontWeight="Bold" Margin="0,0,0,10"
                         Click="RunSimulationButton_Click"/>
+
+                <Button Content="SKANER BŁĘDÓW (FUZZ TEST)" Background="DarkOrange" Foreground="White" FontWeight="Bold" Margin="0,10,0,0" Click="RunFuzzTestButton_Click"/>
 
 
             </StackPanel>
@@ -121,16 +126,31 @@
                     </DataGrid>
                 </TabItem>
 
-                <TabItem Header="Wizualizacja Kaskadowy">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Background="#F0F0F0">
-                        <ItemsControl Name="VisualizationItemsControl" Margin="10">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <VirtualizingStackPanel />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                        </ItemsControl>
-                    </ScrollViewer>
+                <TabItem Header="Wizualizacja Kaskadowa">
+                    <Grid Background="#F0F0F0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="10,10,10,0">
+                            <TextBlock Text="Powiększenie schematu:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,10,0"/>
+                            <Slider x:Name="ZoomSlider" Minimum="0.1" Maximum="2.0" Value="0.5" Width="200" 
+                                    VerticalAlignment="Center" TickFrequency="0.1" IsSnapToTickEnabled="True" TickPlacement="BottomRight"/>
+                            <TextBlock Text="{Binding Value, ElementName=ZoomSlider, StringFormat=\{0:F1\}x}" 
+                                       VerticalAlignment="Center" Margin="10,0,0,0" FontWeight="Bold" Foreground="#005A9E"/>
+                        </StackPanel>
+
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Margin="0,10,0,0">
+                            <ItemsControl Name="VisualizationItemsControl" Margin="10">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <VirtualizingStackPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
                 </TabItem>
 
                 <TabItem Header="Zgeneralizowana Pętla (Algorytm)">

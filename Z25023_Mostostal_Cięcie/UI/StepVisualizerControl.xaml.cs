@@ -95,45 +95,47 @@ public partial class StepVisualizerControl : UserControl
         DrawingCanvas.Children.Add(shearText);
 
         // ==========================================
-        // 3. RYSOWANIE STEMPLI Z NUMERACJĄ
+        // 3. RYSOWANIE STEMPLI Z NUMERACJĄ (Podział na 2 strefy)
         // ==========================================
         for (int i = 0; i < machine.MaxPunches; i++)
         {
             bool isActive = (currentStep.PunchesMask & (1u << i)) != 0;
+            bool isSerrationZone = machine.EnableSerration && i < 16;
 
-            // Baza to środek prasy
             double punchMachineX = (i - machine.MachineCenterIndex) * machine.Pitch;
             double punchCanvasX = GetCanvasX(punchMachineX);
+            double punchWidth = isSerrationZone ? machine.SerrationWidth : machine.PunchWidth;
 
-            // ZMIANA: Szerokość prostokąta odczytuje teraz fizyczną grubość stempla z konfiguracji
+            // Narzędzie seratacji rysujemy na zielono, standardowe na czerwono
+            Brush activeBrush = isSerrationZone ? Brushes.LimeGreen : Brushes.Red;
+            Brush activeStroke = isSerrationZone ? Brushes.DarkGreen : Brushes.DarkRed;
+
             var punchShape = new Rectangle
             {
-                Width = machine.PunchWidth,
+                Width = punchWidth,
                 Height = 30,
                 RadiusX = 2,
                 RadiusY = 2,
-                Fill = isActive ? Brushes.Red : Brushes.WhiteSmoke,
-                Stroke = isActive ? Brushes.DarkRed : Brushes.LightGray,
+                Fill = isActive ? activeBrush : Brushes.WhiteSmoke,
+                Stroke = isActive ? activeStroke : Brushes.LightGray,
                 StrokeThickness = 1
             };
-
-            // Centrowanie narzędzia na jego współrzędnej osi X
-            Canvas.SetLeft(punchShape, punchCanvasX - (machine.PunchWidth / 2.0));
+            Canvas.SetLeft(punchShape, punchCanvasX - (punchWidth / 2.0));
             Canvas.SetTop(punchShape, AxisY - 110);
             DrawingCanvas.Children.Add(punchShape);
 
-            // NOWE: Numeracja stempli (0-31) nad rysunkiem narzędzia
+            // Numeracja z dopasowanym kolorem
             var punchLabel = new TextBlock
             {
                 Text = i.ToString(),
-                FontSize = 20,
+                FontSize = 18,
                 FontWeight = FontWeights.Bold,
-                Foreground = isActive ? Brushes.Red : Brushes.Gray,
-                Width = 22,
-                TextAlignment = TextAlignment.Center // Zapewnia idealne wyśrodkowanie numeru nad stemplem
+                Width = 20,
+                TextAlignment = TextAlignment.Center,
+                Foreground = isActive ? activeBrush : Brushes.Gray
             };
             Canvas.SetLeft(punchLabel, punchCanvasX - 10);
-            Canvas.SetTop(punchLabel, AxisY - 148); // Podniesione nieco wyżej
+            Canvas.SetTop(punchLabel, AxisY - 138);
             DrawingCanvas.Children.Add(punchLabel);
         }
 
@@ -186,7 +188,7 @@ public partial class StepVisualizerControl : UserControl
         }
 
         // ==========================================
-        // 5. HISTORIA OTWORÓW NA MATERIALE
+        // 5. HISTORIA OTWORÓW I SERATACJI NA MATERIALE
         // ==========================================
         foreach (var pastStep in history)
         {
@@ -196,14 +198,35 @@ public partial class StepVisualizerControl : UserControl
             {
                 if ((pastStep.PunchesMask & (1u << i)) != 0)
                 {
-                    // Baza to środek prasy
                     double pastPunchMachineX = (i - machine.MachineCenterIndex) * machine.Pitch;
                     double currentHoleMachineX = pastPunchMachineX + (currentStep.Delta - pastStep.Delta);
                     double holeCanvasX = GetCanvasX(currentHoleMachineX);
 
                     if (holeCanvasX >= backCanvasX && holeCanvasX <= frontCanvasX)
                     {
-                        DrawingCanvas.Children.Add(new Line { X1 = holeCanvasX, Y1 = AxisY - 50, X2 = holeCanvasX, Y2 = AxisY - 10, Stroke = Brushes.Red, StrokeThickness = 1.5 });
+                        bool isSerrationZone = machine.EnableSerration && i < 16;
+
+                        if (isSerrationZone)
+                        {
+                            // ZMIANA: Rysowanie seratacji jako zielonej kreski na 1/3 wysokości brzegu blachy
+                            // Płaskownik ma 40mm wys. (od AxisY-50 do AxisY-10).
+                            // 1/3 wysokości blachy to około 13.33mm.
+                            DrawingCanvas.Children.Add(new Line
+                            {
+                                X1 = holeCanvasX,
+                                Y1 = AxisY - 50, // Początek na górnej krawędzi blachy
+                                X2 = holeCanvasX,
+                                Y2 = AxisY - 36.67, // Koniec w 1/3 wysokości blachy
+                                Stroke = Brushes.DarkGreen,
+                                StrokeThickness = 1.5,
+                                Opacity = 0.9
+                            });
+                        }
+                        else
+                        {
+                            // Standardowy rzaz na środku blachy (nie zmieniony, czerwony, pełna wysokość)
+                            DrawingCanvas.Children.Add(new Line { X1 = holeCanvasX, Y1 = AxisY - 50, X2 = holeCanvasX, Y2 = AxisY - 10, Stroke = Brushes.Red, StrokeThickness = 1.5 });
+                        }
                     }
                 }
             }
@@ -265,5 +288,15 @@ public partial class StepVisualizerControl : UserControl
             Canvas.SetTop(standbyText, AxisY - 105);
             DrawingCanvas.Children.Add(standbyText);
         }
+    }
+
+    /// <summary>
+    /// Podpina właściwości skalowania płótna (Zoom) pod suwak z okna głównego.
+    /// </summary>
+    public void BindZoom(Slider zoomSlider)
+    {
+        var binding = new Binding("Value") { Source = zoomSlider };
+        BindingOperations.SetBinding(CanvasScale, ScaleTransform.ScaleXProperty, binding);
+        BindingOperations.SetBinding(CanvasScale, ScaleTransform.ScaleYProperty, binding);
     }
 }
