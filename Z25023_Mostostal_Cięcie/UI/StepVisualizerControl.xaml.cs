@@ -38,13 +38,12 @@ public partial class StepVisualizerControl : UserControl
         // 0. OBLICZENIE MARGINESU LEWEGO I ZLICZANIE STEMPLI
         // ==========================================
         // Obliczamy fizyczny odstęp uwzględniający grubość narzędzia
-        double punchRadius = machine.PunchWidth / 2.0;
-        double availableLength = detail.Length - (detail.MarginLeft + punchRadius) - (detail.MarginRight + punchRadius);
+        double availableLength = detail.Length - detail.MarginLeft - detail.MarginRight;
 
         int intervals = availableLength > 0 && detail.HolePitch > 0 ? (int)Math.Floor(availableLength / detail.HolePitch) : 0;
 
         // FAKTYCZNY Margines Lewy = Długość detalu - baza prawa - dystans otworów - cała grubość stempla
-        double actualMarginLeft = detail.Length - detail.MarginRight - (intervals * detail.HolePitch) - machine.PunchWidth;
+        double actualMarginLeft = detail.Length - detail.MarginRight - (intervals * detail.HolePitch);
 
         int activePunchesCount = System.Numerics.BitOperations.PopCount(currentStep.PunchesMask);
 
@@ -265,7 +264,7 @@ public partial class StepVisualizerControl : UserControl
             // Powiększony, wyraźny tekst dla cięcia (FontSize = 20)
             var exactCutText = new TextBlock
             {
-                Text = $"CIĘCIE AKTYWNE (X: {knifeCenterMachineX:F1})",
+                Text = $"CIĘCIE AKTYWNE (X: {knifeCenterMachineX:F2})",
                 Foreground = Brushes.Red,
                 FontSize = 20,
                 FontWeight = FontWeights.Bold

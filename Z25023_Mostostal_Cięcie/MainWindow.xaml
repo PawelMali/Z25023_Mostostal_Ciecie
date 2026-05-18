@@ -4,7 +4,8 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:Z25023_Mostostal_Cięcie"
-        xmlns:sp="clr-namespace:ScottPlot.WPF;assembly=ScottPlot.WPF"
+        xmlns:ui="clr-namespace:Z25023_Mostostal_Cięcie.UI"
+        xmlns:sp="clr-namespace:ScottPlot.WPF;assembly=ScottPlot.WPF" 
         mc:Ignorable="d"
         Title="Symulator Prasy Wykrawającej - Hybrid Multistep" Height="768" Width="1024"
         WindowStartupLocation="CenterScreen">
@@ -34,10 +35,11 @@
                     <ComboBoxItem Content="77.7" />
                     <ComboBoxItem Content="88.8" />
                     <ComboBoxItem Content="99.9" />
+                    <!--<ComboBoxItem Content="122.1" />-->
                 </ComboBox>
 
                 <TextBlock Text="Opcje technologiczne:" Margin="0,15,0,5" FontWeight="SemiBold"/>
-                <CheckBox x:Name="chkEnableSerration" Content="Włącz Seratację (Tryb Progresywny)" IsChecked="True" Margin="0,0,0,15" FontWeight="Bold" Foreground="DarkGreen" />
+                <CheckBox x:Name="chkEnableSerration" Content="Włącz Seratację (Tryb Progresywny)" IsChecked="False" Margin="0,0,0,15" FontWeight="Bold" Foreground="DarkGreen" />
 
                 <Grid Margin="0,0,0,15">
                     <Grid.ColumnDefinitions>
@@ -46,11 +48,11 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Margin="0,0,5,0">
                         <TextBlock Text="Margines L:" Margin="0,0,0,5"/>
-                        <TextBox Name="txtMarginLeft" Text="29.55" Padding="4"/>
+                        <TextBox Name="txtMarginLeft" Text="30.3" Padding="4"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1" Margin="5,0,0,0">
                         <TextBlock Text="Margines P:" Margin="0,0,0,5"/>
-                        <TextBox Name="txtMarginRight" Text="29.55" Padding="4"/>
+                        <TextBox Name="txtMarginRight" Text="30.3" Padding="4"/>
                     </StackPanel>
                 </Grid>
 
@@ -187,7 +189,12 @@
                         </DataGrid>
                     </Grid>
                 </TabItem>
+
+                <TabItem Header="Wizualizacja Detalu (CAD)">
+                    <ui:DetailVisualizerControl x:Name="CadVisualizer" />
+                </TabItem>
+                
             </TabControl>
         </Grid>
-    </Grid>
+        </Grid>
 </Window>

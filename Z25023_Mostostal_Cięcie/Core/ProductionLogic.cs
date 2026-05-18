@@ -1,14 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Linq; // Wymagane dla metody ToList(), First(), Last()
 
 namespace Z25023_Mostostal_Cięcie.Core;
 
+/// <summary>
+/// Serce matematyczne symulatora prasy wykrawającej (Tłocznika Postępowego).
+/// Odpowiada za transformacje układów współrzędnych, grupowanie narzędzi (Load Balancing),
+/// obliczanie przeplotów (Interleaving) oraz synchronizację cięcia w locie (Flying Shear).
+/// </summary>
 public class ProductionLogic
 {
     private readonly MachineConfig _machine;
-
-    // Fizyczne parametry maszyny zdefiniowane jako stałe
 
     public ProductionLogic(MachineConfig machineConfig)
     {
@@ -16,52 +20,22 @@ public class ProductionLogic
     }
 
     /// <summary>
-    /// Oblicza absolutną pozycję czoła detalu względem punktu X=0 (czoło D1).
-    /// Uwzględnia szerokość noża (odrzut materiału) po każdym cięciu.
+    /// TRANSFORMACJA WSPÓŁRZĘDNYCH: Oblicza absolutną pozycję czoła detalu w nieskończonym strumieniu materiału.
+    /// 
+    /// Matematyka:
+    /// Materiał to ciągła taśma. Każdy wycięty detal zostawia w materiale "rzaz" (szczelinę) o grubości noża (W_noża).
+    /// Wzór na pozycję czoła n-tego detalu: X_front(n) = n * (L_detalu + W_noża)
     /// </summary>
-    /// <param name="detailIndex">Indeks detalu (0 dla D1, 1 dla D2, itd.)</param>
+    /// <param name="detailIndex">Indeks detalu w partii (0 dla D1, 1 dla D2, itd.)</param>
     public double GetAbsoluteFrontPosition(int detailIndex, DetailConfig detail)
     {
-        // Dla D1 (index 0) pozycja to 0.
-        // Dla D2 (index 1) pozycja to Długość detalu + Szerokość noża.
         return detailIndex * (detail.Length + _machine.BladeWidth);
     }
 
-
     /// <summary>
-    /// Weryfikuje warunek cięcia (Eager Cut) dla bieżącej absolutnej pozycji płaskownika w maszynie.
-    /// Zwraca true, jeśli cięcie może być wykonane w locie (SYNC).
+    /// GENERATOR MASKI BITOWEJ (PLC): Tłumaczy tablicę dziesiętnych indeksów narzędzi na format 32-bitowy.
+    /// Standard stosowany w przemyśle do szybkiej komunikacji ze sterownikiem PLC (np. Siemens SCL).
     /// </summary>
-    /// <param name="currentMaterialPosition">Aktualne przesunięcie materiału w maszynie (Delta sumaryczna)</param>
-    /// <param name="cutTargetPosition">Absolutna pozycja na płaskowniku, w której ma nastąpić cięcie (np. koniec detalu D1)</param>
-    /// <param name="requiresStopStep">Flaga wyjściowa (out) informująca, czy przekroczono ShearMax i wymagany jest krok STOP</param>
-    public bool CheckShearCondition(double currentMaterialDelta, double cutTargetPosition, out bool requiresStopStep)
-    {
-        requiresStopStep = false;
-
-        // Gdzie w maszynie fizycznie znajduje się linia odcięcia płaskownika
-        double cutLineMachineX = currentMaterialDelta - cutTargetPosition;
-
-        // Sprawdzamy, czy linia cięcia wjechała w strefę nożyc (np. 1850.7)
-        if (cutLineMachineX >= _machine.ShearMin && cutLineMachineX <= _machine.ShearMax)
-        {
-            return true;
-        }
-
-        // Jeśli materiał wyjechał za daleko (linia cięcia minęła max zasięg)
-        if (cutLineMachineX > _machine.ShearMax)
-        {
-            requiresStopStep = true;
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// Konwertuje listę indeksów stempli (0-31) na maskę bitową zgodną z Siemens DWORD.
-    /// </summary>
-    /// <param name="activePunches">Kolekcja indeksów używanych stempli (np. [14, 15, 16, 17])</param>
-    /// <returns>32-bitowa wartość uint reprezentująca maskę narzędzi</returns>
     public uint GeneratePunchMask(IEnumerable<int> activePunches)
     {
         uint mask = 0;
@@ -69,8 +43,7 @@ public class ProductionLogic
         {
             if (punchIndex >= 0 && punchIndex < _machine.MaxPunches)
             {
-                // Ustawienie bitu na 1 na odpowiedniej pozycji
-                mask |= (1u << punchIndex);
+                mask |= (1u << punchIndex); // Operacja bitowa OR z przesunięciem (Shift Left)
             }
             else
             {
@@ -81,70 +54,75 @@ public class ProductionLogic
     }
 
     /// <summary>
-    /// Dzieli zrównoważenie zadania. Pozwala na wymuszenie większej liczby paczek (forcedChunks),
-    /// co jest kluczowe, gdy standardowy podział nie pozwala na trafienie w strefę cięcia.
+    /// BALANSER OBCIĄŻENIA (LOAD BALANCER): Dzieli całkowitą liczbę otworów na pakiety uderzeń.
+    /// Zapobiega powstawaniu pakietów resztkowych (np. uderzeń 1-stemplowych), dążąc do równomiernego zużycia narzędzi.
+    /// 
+    /// Matematyka:
+    /// N_chunks = Wymuszona Ilość LUB Ceil(TotalHoles / MaxPunches)
+    /// Rozmiar bazowy: BaseSize = Floor(TotalHoles / N_chunks)
+    /// Reszta z dzielenia: Remainder = TotalHoles MOD N_chunks (rozdzielana po +1 do pierwszych paczek).
     /// </summary>
-public List<int> CalculateBalancedChunks(int totalHoles, int availablePunches, int forcedChunks = 0)
-        {
-            if (totalHoles <= 0) return new List<int>();
-            int numberOfChunks = forcedChunks > 0 ? forcedChunks : (int)Math.Ceiling((double)totalHoles / availablePunches);
-            if (numberOfChunks <= 0) numberOfChunks = 1;
-            if (numberOfChunks > totalHoles) numberOfChunks = totalHoles;
+    public List<int> CalculateBalancedChunks(int totalHoles, int availablePunches, int forcedChunks = 0)
+    {
+        if (totalHoles <= 0) return new List<int>();
+        // przykład 23 / 10 = 2.3 → Ceil → 3 pakiety
+        // Jeśli 'forcedChunks' jest podane i większe od zera, użyj go zamiast wyliczonej liczby pakietów.
+        int numberOfChunks = forcedChunks > 0 ? forcedChunks : (int)Math.Ceiling((double)totalHoles / availablePunches);
+        if (numberOfChunks <= 0) numberOfChunks = 1;
+        if (numberOfChunks > totalHoles) numberOfChunks = totalHoles;
 
-            int baseSize = totalHoles / numberOfChunks;
-            int remainder = totalHoles % numberOfChunks;
-            var chunks = new List<int>(numberOfChunks);
-            for (int i = 0; i < numberOfChunks; i++) chunks.Add(baseSize + (i < remainder ? 1 : 0));
-            return chunks;
-        }
-
-
+        //Ile otworów w każdym pakiecie: 23 otwory, 3 pakiety → BaseSize = 7, Remainder = 2 → Pakiety: [8, 8, 7]
+        int baseSize = totalHoles / numberOfChunks;
+        int remainder = totalHoles % numberOfChunks;
+        var chunks = new List<int>(numberOfChunks);
+        for (int i = 0; i < numberOfChunks; i++) chunks.Add(baseSize + (i < remainder ? 1 : 0));
+        return chunks;
+    }
 
     /// <summary>
-    /// Generuje listę współrzędnych (X) ŚRODKÓW otworów dla pojedynczego detalu względem jego CZOŁA (0.0).
-    /// Uwzględnia grubość narzędzia (PunchWidth), aby zachować zadeklarowane marginesy fizyczne do krawędzi wycięcia.
+    /// WYZNACZANIE WSPÓŁRZĘDNYCH OTWORÓW: Oblicza idealne rozmieszczenie otworów na detalu (względem jego własnego zera).
+    /// 
+    /// Matematyka:
+    /// Aby zachować fizyczny margines krawędzi (nie przeciąć obwodu detalu), środek stempla (TCP) 
+    /// musi być odsunięty o promień narzędzia: r = PunchWidth / 2.0.
+    /// 
+    /// Bezpieczny Margines = M + r.
+    /// Przestrzeń Robocza (L_dost) = L_detalu - (M_prawy + r) - (M_lewy + r).
+    /// Ilość Otworów (N) = Floor(L_dost / P_otworu) + 1.
+    /// Pozycja i-tego otworów: X(i) = (M_prawy + r) + (i * P_otworu).
     /// </summary>
     public List<double> CalculateHolePositions(DetailConfig detail)
     {
         var positions = new List<double>();
 
-        // Odległość od środka stempla do jego krawędzi
-        double punchRadius = _machine.PunchWidth / 2.0;
-
-        // Bezpieczna baza - odległość od krawędzi płaskownika do ŚRODKA pierwszego narzędzia
-        double centerMarginRight = detail.MarginRight + punchRadius;
-        double centerMarginLeft = detail.MarginLeft + punchRadius;
-
-        // Dostępna przestrzeń na umieszczenie środków kolejnych otworów
+        double centerMarginRight = detail.MarginRight;
+        double centerMarginLeft = detail.MarginLeft;
         double availableLength = detail.Length - centerMarginRight - centerMarginLeft;
 
-        if (availableLength < 0) return positions; // Narzędzie nie zmieści się z zachowaniem marginesów
+        if (availableLength < 0) return positions;
         if (detail.HolePitch <= 0) throw new ArgumentException("Skok otworów musi być większy od zera.");
 
-        // Liczba pełnych skoków
         int numberOfIntervals = (int)Math.Floor(availableLength / detail.HolePitch);
         int numberOfHoles = numberOfIntervals + 1;
 
-        // BAZOWANIE NA PRAWYM MARGINESIE:
         for (int i = 0; i < numberOfHoles; i++)
         {
-            // Pozycja to środek narzędzia
             positions.Add(centerMarginRight + (i * detail.HolePitch));
         }
 
         return positions;
     }
 
-
     /// <summary>
-    /// Generuje globalną listę kroków dla całej partii płaskowników.
-    /// Gwarantuje absolutny zakaz cofania (Forward-Only) poprzez globalne sortowanie wszystkich uderzeń.
+    /// SILNIK GŁÓWNY (UNIFIED PIPELINE): Synchronizuje uderzenia w przestrzeni.
+    /// Rozwiązuje problem Tłocznika Postępowego: Seratacja (narzędzia lewe) musi zgrać się
+    /// z Otworowaniem (narzędzia prawe) na ciągłym strumieniu materiału.
     /// </summary>
     public List<SimulationStep> GenerateProductionSteps(DetailConfig detail, int detailCount, double optimalKnifeX, int forcedChunks)
     {
-        // Zbieramy wszystkie uderzenia dla całej partii produkcyjnej do jednej listy
         var allGlobalPasses = new List<(PunchPass Pass, double AbsoluteFrontX)>();
 
+        // 6A: Generowanie "surowych" map uderzeń (Passes) dla całej zleconej partii.
         for (int d = 0; d < detailCount; d++)
         {
             double absoluteDetailFrontX = GetAbsoluteFrontPosition(d, detail);
@@ -152,9 +130,11 @@ public List<int> CalculateBalancedChunks(int totalHoles, int availablePunches, i
 
             if (_machine.EnableSerration)
             {
-                // SERATACJA
+                // STREFA 1: SERATACJA (Indeksy 0 - 15)
                 List<double> serrationHoles = CalculateSerrationPositions(detail, standardHoles);
                 int effSerration = GetEffectiveMaxPunches(11.1, 16);
+
+                // UWAGA KINEMATYCZNA: Seratacja jest niezależna od gilotyny, używa wymuszenia = 0, aby sama wyliczyła bezpieczne pakiety.
                 List<int> serrChunkSizes = CalculateBalancedChunks(serrationHoles.Count, effSerration, 0);
                 int sHoleIndex = 0;
                 foreach (int chunkSize in serrChunkSizes)
@@ -164,8 +144,10 @@ public List<int> CalculateBalancedChunks(int totalHoles, int availablePunches, i
                     sHoleIndex += chunkSize;
                 }
 
-                // STANDARD
+                // STREFA 2: STANDARD (Indeksy 16 - 31)
                 int effStandard = GetEffectiveMaxPunches(detail.HolePitch, 16);
+
+                // UWAGA KINEMATYCZNA: Strefa 2 jest sztywno połączona z gilotyną. Słucha nakazu 'forcedChunks'.
                 List<int> stdChunkSizes = CalculateBalancedChunks(standardHoles.Count, effStandard, forcedChunks);
                 int stdHoleIndex = 0;
                 foreach (int chunkSize in stdChunkSizes)
@@ -177,7 +159,7 @@ public List<int> CalculateBalancedChunks(int totalHoles, int availablePunches, i
             }
             else
             {
-                // TYLKO STANDARD
+                // TRYB KLASYCZNY: Cała maszyna (Indeksy 0 - 31) działa nad standardowymi otworami.
                 int effStandard = GetEffectiveMaxPunches(detail.HolePitch, _machine.MaxPunches);
                 List<int> stdChunkSizes = CalculateBalancedChunks(standardHoles.Count, effStandard, forcedChunks);
                 int stdHoleIndex = 0;
@@ -190,9 +172,9 @@ public List<int> CalculateBalancedChunks(int totalHoles, int availablePunches, i
             }
         }
 
-        // ==========================================
-        // KRYTYCZNE SORTOWANIE GLOBALNE (Synchronizacja w przestrzeni)
-        // ==========================================
+        // 6B: KRYTYCZNE SORTOWANIE GLOBALNE (Zabezpieczenie przed cofaniem maszyny)
+        // Matematyka: Grupowanie po absolutnej pozycji maszyny: Math.Round(Δ_maszyny, 2).
+        // Rozwiązuje problem wyprzedzania się kroków z różnych stref i detali.
         var groupedPasses = allGlobalPasses
             .GroupBy(item => Math.Round(CalculateMachineDelta(item.AbsoluteFrontX, item.Pass.ReferenceHoleX, item.Pass.ReferencePunchIndex), 2))
             .OrderBy(g => g.Key)
@@ -203,12 +185,14 @@ public List<int> CalculateBalancedChunks(int totalHoles, int availablePunches, i
         int currentStep = 1;
         double detailTotalLength = detail.Length + _machine.BladeWidth;
 
+        // 6C: Kompresja zgrupowanych uderzeń w konkretne ramki (Steps) dla sterownika PLC
         foreach (var group in groupedPasses)
         {
             uint combinedMask = 0;
             bool isMicrostep = true;
-            double currentMaterialDelta = group.Key; // Wartość grupy to gotowa, fizyczna pozycja maszyny
+            double currentMaterialDelta = group.Key;
 
+            // Jeśli uderzenie seratacji i standardowe zgrało się idealnie w tym samym mikrokroku, złącz maski bitowe
             foreach (var item in group)
             {
                 combinedMask |= GeneratePunchMask(item.Pass.ActivePunchIndices);
@@ -216,16 +200,20 @@ public List<int> CalculateBalancedChunks(int totalHoles, int availablePunches, i
             }
 
             double stepDisplacement = currentMaterialDelta - lastAbsoluteDelta;
-            if (currentStep == 1) stepDisplacement = 0.0;
+            if (currentStep == 1) stepDisplacement = 0.0; // Rozruch maszyny
             lastAbsoluteDelta = currentMaterialDelta;
 
+            // Weryfikacja synchronizacji noża (cięcie z odrzutem/rzazem)
             bool isCutActive = false;
             if (!isMicrostep)
             {
                 double absoluteMaterialUnderKnife = currentMaterialDelta - optimalKnifeX;
                 double shifted = absoluteMaterialUnderKnife + (_machine.BladeWidth / 2.0);
+
+                // Modulo cięcia: najbliższa wielokrotność długości całkowitej detalu.
                 double multiple = Math.Round(shifted / detailTotalLength);
                 double nearestKerfShifted = multiple * detailTotalLength;
+
                 if (Math.Abs(shifted - nearestKerfShifted) < 0.1) isCutActive = true;
             }
 
@@ -247,34 +235,36 @@ public List<int> CalculateBalancedChunks(int totalHoles, int availablePunches, i
     }
 
     /// <summary>
-    /// Wylicza fizyczny przesuw materiału maszyny (Delta).
-    /// Punkt 0 osi X znajduje się teraz idealnie na ŚRODKU prasy (MachineCenterIndex).
+    /// [7] KINEMATYKA MASZYNY (WYZNACZANIE DELTY): Równanie transformacji osi.
+    /// 
+    /// Matematyka:
+    /// Układ maszyny zakłada punkt 0.0 na IDEALNYM ŚRODKU (indeks 15.5).
+    /// Oś współrzędnych stempla względem zera: X_masz_stempla = (Indeks - 15.5) * Skok_Maszyny
+    /// Współrzędna absolutna otworu w materiale: X_abs_otworu = X_front + X_otworu_w_detalu.
+    /// Aby stempel trafił w otwór, czoło materiału (Δ_maszyny) musi zostać wciągnięte na pozycję:
+    /// Δ_maszyny = X_abs_otworu + X_masz_stempla
     /// </summary>
     private double CalculateMachineDelta(double absoluteDetailFrontX, double holeXOnDetail, int punchIndex)
     {
-        // Stemple po lewej od środka mają X ujemne, po prawej X dodatnie.
         double punchAxisPosition = (punchIndex - _machine.MachineCenterIndex) * _machine.Pitch;
-
         double absoluteHolePosition = absoluteDetailFrontX + holeXOnDetail;
-
-        // Pozycja czoła materiału w maszynie (Delta) tak, aby otwór zrównał się ze stemplem
         return absoluteHolePosition + punchAxisPosition;
     }
 
-    // Deklaracja pomocniczej struktury dla przejść (mikrokroków)
     private record PunchPass(List<int> ActivePunchIndices, double ReferenceHoleX, int ReferencePunchIndex, bool IsMicrostep);
 
-
     /// <summary>
-    /// Grupuje otwory w paczce na konkretne uderzenia (Passes).
-    /// Używa Dynamicznego Ogranicznika Kinematycznego (Forward-Only), 
-    /// maksymalizując centrowanie narzędzi bez łamania fizyki prasy.
+    /// [8] ALGORYTM PRZEPLOTU (INTERLEAVING): Mapowanie fizycznych otworów na uderzenia matrycy.
+    /// Posiada Dynamiczny Ogranicznik Kinematyczny zapobiegający ruchom w tył prasy.
+    /// 
+    /// Matematyka Ogranicznika:
+    /// Jeśli proporcja narzędzi wynosi 'ratio', to minimalny stempel dla kolejnego przeplotu (p),
+    /// gwarantujący dodatni posuw maszyny, określa wzór: minRequired = Ceil(HighestPunch(p-1) - ratio).
     /// </summary>
     private List<PunchPass> CalculatePassesForChunk(List<double> chunkHoles, double holePitch, int minPunch, int maxPunch)
     {
         var passes = new List<PunchPass>();
         double ratio = holePitch / _machine.Pitch;
-
         int availablePunches = maxPunch - minPunch + 1;
         double subsetCenterIndex = minPunch + (availablePunches - 1) / 2.0;
 
@@ -284,6 +274,7 @@ public List<int> CalculateBalancedChunks(int totalHoles, int availablePunches, i
             var subHolesList = new List<List<double>>();
             var idealHighest = new int[B];
 
+            // A: Generowanie idealnych przeplotów (każdy uderza możliwie najbliżej środka strefy)
             for (int p = 0; p < B; p++)
             {
                 var subHoles = new List<double>();
@@ -293,6 +284,7 @@ public List<int> CalculateBalancedChunks(int totalHoles, int availablePunches, i
                 if (subHoles.Count > 0)
                 {
                     int span = (subHoles.Count - 1) * A;
+                    // Centrowanie wokół lokalnego środka podzespołu (np. między indeksem 16 a 31 = 23.5)
                     idealHighest[p] = (int)Math.Max(minPunch, Math.Round(subsetCenterIndex + (span / 2.0), MidpointRounding.AwayFromZero));
                     if (idealHighest[p] > maxPunch) idealHighest[p] = maxPunch;
                 }
@@ -301,15 +293,17 @@ public List<int> CalculateBalancedChunks(int totalHoles, int availablePunches, i
             var actualHighest = new int[B];
             if (subHolesList[0].Count > 0)
             {
+                // Pierwszy przeplot uderza bezkarnie w cel (Ideal)
                 actualHighest[0] = idealHighest[0];
                 passes.Add(CreatePass(subHolesList[0], A, actualHighest[0]));
 
+                // Kolejne przeploty muszą negocjować z Fizyką (Zakaz Cofania)
                 for (int p = 1; p < B; p++)
                 {
                     if (subHolesList[p].Count > 0)
                     {
                         int minRequired = (int)Math.Ceiling(actualHighest[p - 1] - ratio);
-                        actualHighest[p] = Math.Max(idealHighest[p], minRequired);
+                        actualHighest[p] = Math.Max(idealHighest[p], minRequired); // Negocjacja: co większe (ideał vs twarda fizyka)
                         if (actualHighest[p] > maxPunch) actualHighest[p] = maxPunch;
                         passes.Add(CreatePass(subHolesList[p], A, actualHighest[p]));
                     }
@@ -318,6 +312,8 @@ public List<int> CalculateBalancedChunks(int totalHoles, int availablePunches, i
         }
         else
         {
+            // Tryb awaryjny mikrokroku (Fallback): Niezidentyfikowany skok. 
+            // Maszyna bije jednym centralnym stęplem (krok 1 narzędzia) i przesuwa materiał powoli.
             int centerPunch = (int)Math.Floor(subsetCenterIndex);
             for (int i = 0; i < chunkHoles.Count; i++)
             {
@@ -327,38 +323,36 @@ public List<int> CalculateBalancedChunks(int totalHoles, int availablePunches, i
         return passes;
     }
 
-
     /// <summary>
-    /// Tworzy mapowanie narzędzi dla danego przeplotu na podstawie wyznaczonego górnego stempla.
+    /// Metoda pomocnicza tworząca gotowy zestaw indeksów bitowych dla danego kroku przeplotu.
     /// </summary>
     private PunchPass CreatePass(List<double> holes, int punchStride, int highestPunch)
     {
         var indices = new List<int>();
         for (int i = 0; i < holes.Count; i++)
         {
-            indices.Add(highestPunch - i * punchStride);
+            indices.Add(highestPunch - i * punchStride); // Indeksy spadają: Prawa strona -> Lewa strona
         }
         return new PunchPass(indices, holes[0], highestPunch, false);
     }
 
     /// <summary>
-    /// Wylicza idealną pozycję noża. Jeśli standardowy podział uderzeń nie zgra rzazu ze strefą nożyc,
-    /// algorytm zwiększa liczbę podziałów (chunks), aż fizyka maszyny "wepchnie" cięcie w strefę.
-    /// </summary>
-    /// <summary>
-    /// Wylicza idealną pozycję noża, symulując przyszłe uderzenia prasy.
-    /// Automatycznie uwzględnia zmniejszoną ilość stempli, jeśli włączona jest Seratacja.
+    /// PREKALKULATOR GILOTYNY (PREDICTIVE SHEAR): Symuluje ruch maszyny i wylicza dokładny X dla nożyc.
+    /// 
+    /// Matematyka:
+    /// Gilotyna nie może zatrzymywać materiału (strata czasu). Musi zgrywać się z otworowaniem.
+    /// Cel Noża (CutTarget) to środek rzazu na granicy detali: X_rzazu = L_detalu + W_noża / 2.
+    /// Poszukujemy takiego podziału 'Chunks', by przy M-tej iteracji detalu:
+    /// X_noża = Δ_maszyny_w_momencie_bicia_stempla(M) - X_rzazu ∈ [ShearMin, ShearMax].
     /// </summary>
     public double CalculateOptimalKnifePosition(DetailConfig detail, out int optimalChunks)
     {
         List<double> holePositions = CalculateHolePositions(detail);
 
-        // 1. Zabezpieczenie kontekstu narzędzi zależnie od trybu
         int minPunch = _machine.EnableSerration ? 16 : 0;
         int maxPunch = _machine.MaxPunches - 1;
         int availablePunches = maxPunch - minPunch + 1;
 
-        // 2. Pobranie efektywnej wydajności z uwzględnieniem dostępnych stempli
         int effectiveMaxPunches = GetEffectiveMaxPunches(detail.HolePitch, availablePunches);
 
         int minChunks = (int)Math.Ceiling((double)holePositions.Count / effectiveMaxPunches);
@@ -378,8 +372,6 @@ public List<int> CalculateBalancedChunks(int totalHoles, int availablePunches, i
             {
                 var chunkHoles = holePositions.GetRange(holeIndex, chunkSize);
                 holeIndex += chunkSize;
-
-                // 3. Przekazanie prawidłowych zakresów stempli do symulatora paczek
                 allPasses.AddRange(CalculatePassesForChunk(chunkHoles, detail.HolePitch, minPunch, maxPunch));
             }
 
@@ -397,6 +389,7 @@ public List<int> CalculateBalancedChunks(int totalHoles, int availablePunches, i
                 validPassDeltas.Add(CalculateMachineDelta(0, allPasses.Last().ReferenceHoleX, allPasses.Last().ReferencePunchIndex));
             }
 
+            // Rozciągamy badanie posuwu dla M symulowanych detali w przód.
             for (int M = 0; M < 20; M++)
             {
                 foreach (double passDelta in validPassDeltas)
@@ -413,14 +406,14 @@ public List<int> CalculateBalancedChunks(int totalHoles, int availablePunches, i
             }
         }
 
+        // Zabezpieczenie awaryjne dla niewymiarowych/ekstremalnych płaskowników
         optimalChunks = minChunks;
         return Math.Max(_machine.ShearMin, Math.Min(2000.0, _machine.ShearMax));
     }
 
-
     /// <summary>
-    /// Wylicza rzeczywistą maksymalną ilość otworów w jednym rzucie.
-    /// Uwzględnia przeploty (Interleaving) dla dowolnej podziałki proporcjonalnej.
+    /// Oblicza faktyczną wydajność strefy biorąc pod uwagę odciążenie wynikające z przeplotów.
+    /// Wydajność = (Max_dostępnych_stempli / Zębatka_A) * Przeploty_B
     /// </summary>
     private int GetEffectiveMaxPunches(double holePitch, int availablePunches)
     {
@@ -434,21 +427,21 @@ public List<int> CalculateBalancedChunks(int totalHoles, int availablePunches, i
         return availablePunches;
     }
 
-
-
     /// <summary>
-    /// Szuka uniwersalnej proporcji (przekładni) między skokiem otworu a skokiem maszyny.
-    /// Zwraca A (krok stempli) oraz B (ilość przeplotów/cykli).
+    /// ANALIZATOR PRZEKŁADNI (FRACTION DETECTOR): Poszukuje ułamkowego wzorca między skokiem otworów a stempli.
+    /// 
+    /// Matematyka:
+    /// Szuka ułamka A/B ≈ ratio, gdzie B ∈ [1, 20]. Zapewnia to identyfikację skoków takich jak:
+    /// 11.1 / 33.3 = 1/3 (A=1, B=3 -> maszyna wykona to w 3 fazach używając co 1 stempla)
+    /// 44.4 / 33.3 = 4/3 (A=4, B=3 -> maszyna wykona to w 3 fazach używając co 4 stempla)
     /// </summary>
     private bool FindRationalRatio(double ratio, out int A, out int B, double tolerance = 0.01)
     {
-        // B to nasz mianownik (ilość przeplotów blachy). Szukamy optymalnego do max 20 uderzeń.
         for (int b = 1; b <= 20; b++)
         {
             double aDouble = b * ratio;
             int a = (int)Math.Round(aDouble);
 
-            // Jeśli wynik jest bliski liczbie całkowitej, znaleźliśmy idealne zębatki!
             if (Math.Abs(aDouble - a) <= tolerance)
             {
                 A = a;
@@ -456,16 +449,17 @@ public List<int> CalculateBalancedChunks(int totalHoles, int availablePunches, i
                 return true;
             }
         }
-
         A = 1; B = 1;
         return false;
     }
 
-
     /// <summary>
-    /// Generuje współrzędne dla stempli seratacji z przesunięciem fazowym 5.55 mm.
-    /// Ilość nacięć na marginesach jest teraz ściśle limitowana przez pełne wielokrotności skoku 11.1,
-    /// co zapobiega niepełnym cięciom i zrywaniu krawędzi materiału.
+    /// [11] GENERATOR SERATACJI (PHASE SHIFTER): Oblicza półokrągłe nacięcia na krawędzi detalu.
+    /// 
+    /// Matematyka:
+    /// Seratacja stosuje sztuczne przesunięcie fazowe w przestrzeni detalu: Offset = 11.1 / 2 = 5.55 mm.
+    /// Marginesy są rygorystycznie limitowane i ucinane w dół (Floor), aby zapobiec uderzeniom o skraj krawędzi blachy.
+    /// Ilość bezpiecznych nacięć na marginesie = Floor(Rzeczywisty_Margines / Stały_Skok_Seratacji).
     /// </summary>
     public List<double> CalculateSerrationPositions(DetailConfig detail, List<double> standardPositions)
     {
@@ -476,22 +470,22 @@ public List<int> CalculateBalancedChunks(int totalHoles, int availablePunches, i
         double anchorLast = standardPositions.Last();
         double radius = _machine.SerrationWidth / 2.0;
 
-        // 1. Seratacje wewnątrz płaskownika (między pierwszym a ostatnim otworem)
+        // 1. Ośrodek Seratacji: Wypełnienie między skrajnymi otworami ze stałym skokiem i offsetem
         double pos = anchorFirst + 5.55;
         while (pos < anchorLast)
         {
             serrations.Add(pos);
-            pos += 11.1; // Logiczny, stały skok seratacji na materiale
+            pos += 11.1;
         }
 
         // 2. Seratacje na prawym marginesie (Czoło)
-        // Zgodnie z Twoją logiką: np. Floor(29.55 / 11.1) = 2 uderzenia
+        // Ilość bezpiecznych uderzeń wg logiki warsztatowej
         int rightSerrationsCount = (int)Math.Floor(detail.MarginRight / 11.1);
         pos = anchorFirst - 5.55;
 
         for (int i = 0; i < rightSerrationsCount; i++)
         {
-            if (pos >= radius) // Ostateczny bezpiecznik fizyczny
+            if (pos >= radius) // Zabezpieczenie promienia fizycznego noża seratacji
             {
                 serrations.Add(pos);
             }
@@ -499,11 +493,10 @@ public List<int> CalculateBalancedChunks(int totalHoles, int availablePunches, i
         }
 
         // 3. Seratacje na lewym marginesie (Tył detalu)
-        // Najpierw wyliczamy FAKTYCZNY czysty margines od fizycznej krawędzi ostatniego otworu do końca blachy
-        double punchRadius = _machine.PunchWidth / 2.0;
-        double actualMarginLeft = detail.Length - (anchorLast + punchRadius);
 
-        // Limitujemy ilość analogicznie jak z prawej strony (np. Floor(39.45 / 11.1) = 3 uderzenia)
+
+        // Faktyczna bezpieczna blacha po uwzględnieniu noża otworu standardowego
+        double actualMarginLeft = detail.Length - anchorLast;
         int leftSerrationsCount = (int)Math.Floor(actualMarginLeft / 11.1);
         pos = anchorLast + 5.55;
 
@@ -521,5 +514,3 @@ public List<int> CalculateBalancedChunks(int totalHoles, int availablePunches, i
         return list;
     }
 }
-
-

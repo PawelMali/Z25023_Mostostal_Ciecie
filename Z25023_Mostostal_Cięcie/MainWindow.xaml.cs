@@ -138,6 +138,24 @@ namespace Z25023_Mostostal_Cięcie
                     stepControl.BindZoom(ZoomSlider);
                     VisualizationItemsControl.Items.Add(stepControl);
                 }
+
+
+                // ==========================================
+                // 5. RYSOWANIE ZWYMIAROWANEGO DETALU (CAD)
+                // ==========================================
+
+                // Wyliczamy czyste współrzędne dla pojedynczego detalu używając naszej zaufanej matematyki
+                List<double> stdHoles = logic.CalculateHolePositions(detailConfig);
+                List<double> serrHoles = new List<double>();
+
+                if (machineConfig.EnableSerration)
+                {
+                    serrHoles = logic.CalculateSerrationPositions(detailConfig, stdHoles);
+                }
+
+                // Przekazujemy to do kontrolki umieszczonej w nowej zakładce
+                CadVisualizer.RenderCAD(detailConfig, machineConfig, stdHoles, serrHoles);
+
             }
             catch (FormatException)
             {
