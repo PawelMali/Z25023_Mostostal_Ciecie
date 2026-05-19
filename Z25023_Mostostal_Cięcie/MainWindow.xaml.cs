@@ -28,6 +28,48 @@ namespace Z25023_Mostostal_Cięcie
             InitializeComponent();
         }
 
+        // Nowy konstruktor przyjmujący parametry z zewnątrz (z projektu głównego)
+        public MainWindow(double length, double pitch, double marginLeft, double marginRight, bool isSerration) : this()
+        {
+            var culture = System.Globalization.CultureInfo.InvariantCulture;
+
+            // Wypełniamy formularz (wymuszając InvariantCulture dla kropek w ułamkach)
+            txtLength.Text = length.ToString(culture);
+            txtMarginLeft.Text = marginLeft.ToString(culture);
+            txtMarginRight.Text = marginRight.ToString(culture);
+
+            chkEnableSerration.IsChecked = isSerration;
+
+            // Zabezpieczenie (Best Practice): Szukamy podziałki w ComboBoxie. 
+            // Jeśli PLC przyśle niestandardową (np. 15.5), dodamy ją dynamicznie, by nie wywalić aplikacji.
+            string pitchStr = pitch.ToString(culture);
+            bool pitchFound = false;
+            foreach (ComboBoxItem item in cmbPitch.Items)
+            {
+                if (item.Content.ToString() == pitchStr)
+                {
+                    cmbPitch.SelectedItem = item;
+                    pitchFound = true;
+                    break;
+                }
+            }
+
+            if (!pitchFound)
+            {
+                cmbPitch.Items.Add(new ComboBoxItem { Content = pitchStr, IsSelected = true });
+            }
+
+            // Automatyczny start symulacji DOPIERO gdy UI będzie w pełni narysowane.
+            // Unikamy problemów z rysowaniem po Canvasie zanim ten zostanie wyliczony przez WPF.
+            RoutedEventHandler onLoaded = null;
+            onLoaded = (s, e) =>
+            {
+                this.Loaded -= onLoaded; // WAŻNE: Odpinamy event natychmiast po pierwszym uruchomieniu!
+                RunSimulationButton_Click(this, new RoutedEventArgs());
+            };
+            this.Loaded += onLoaded;
+        }
+
         private void RunSimulationButton_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -37,6 +79,7 @@ namespace Z25023_Mostostal_Cięcie
                 LoopSequenceDataGrid.ItemsSource = null;
                 VisualizationItemsControl.ItemsSource = null;
                 VisualizationItemsControl.Items.Clear();
+                CadVisualizer.DrawingCanvas.Children.Clear(); 
 
                 // 1. Bezpieczne parsowanie parametrów wejściowych (wymuszamy kropkę jako separator dziesiętny)
                 var culture = CultureInfo.InvariantCulture;
@@ -234,6 +277,33 @@ namespace Z25023_Mostostal_Cięcie
                 MessageBox.Show($"Skaner zakończył pracę. Brak błędów!\nPrzetestowano {counter} kombinacji.",
                                 "Raport ze Skanera", MessageBoxButton.OK, MessageBoxImage.Information);
             }
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            // 1. Zrywamy Data Bindingi - zwalniamy pamięć tabel
+            ResultsDataGrid.ItemsSource = null;
+            LoopSequenceDataGrid.ItemsSource = null;
+
+            // 2. Brutalnie czyścimy tysiące wygenerowanych wektorów WPF
+            VisualizationItemsControl.ItemsSource = null;
+            VisualizationItemsControl.Items.Clear(); // Niszczy wszystkie StepVisualizerControl
+
+            // Czyszczenie głównego rysunku CAD detalu
+            if (CadVisualizer?.DrawingCanvas != null)
+            {
+                CadVisualizer.DrawingCanvas.Children.Clear();
+            }
+
+            // Wywołujemy standardowe zamknięcie WPF
+            base.OnClosed(e);
+
+            // 3. Agresywne wymuszenie odśmiecenia (GC)
+            // W normalnych apkach tego unikamy, ale w systemach inżynieryjnych / HMI 
+            // z tak ogromną ilością wektorów to jedyny sposób na "płaski" wykres użycia RAM-u.
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
         }
     }
 }
