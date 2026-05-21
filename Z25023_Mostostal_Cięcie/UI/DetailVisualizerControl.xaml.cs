@@ -194,10 +194,10 @@ public partial class DetailVisualizerControl : UserControl
                 double pSerrEndX = OffsetX + visualSerrHoles[sIndex2];
 
                 // PIĘTRO 2 (Górne): Skok pojedynczej seratacji na nowej, niezależnej wysokości
-                DrawDimensionLine(pSerrStartX, pSerrEndX, BarY - 45, BarY, $"p={11.1:F1}");
+                DrawDimensionLine(pSerrStartX, pSerrEndX, BarY - 45, BarY, $"p={machine.SerrationPitch:F1}");
 
                 // PIĘTRO 3 (Górne): Skumulowany skok seratacji (n x 11.1)
-                DrawDimensionLine(firstSerrX, lastSerrX, BarY - 65, BarY, $"{serrGaps} x {11.1:F1} = {serrGaps * 11.1:F1}");
+                DrawDimensionLine(firstSerrX, lastSerrX, BarY - 65, BarY, $"{serrGaps} x {machine.SerrationPitch:F1} = {serrGaps * machine.SerrationPitch:F1}");
             }
         }
     }

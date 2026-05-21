@@ -43,12 +43,12 @@ public partial class StepVisualizerControl : UserControl
         int intervals = availableLength > 0 && detail.HolePitch > 0 ? (int)Math.Floor(availableLength / detail.HolePitch) : 0;
 
         // FAKTYCZNY Margines Lewy = Długość detalu - baza prawa - dystans otworów - cała grubość stempla
-        double actualMarginLeft = detail.Length - detail.MarginRight - (intervals * detail.HolePitch);
+        double actualMarginRight = detail.Length - detail.MarginRight - (intervals * detail.HolePitch);
 
         int activePunchesCount = System.Numerics.BitOperations.PopCount(currentStep.PunchesMask);
 
         // ZIELONY NAGŁÓWEK
-        RunTitle.Text = $"KROK {currentStep.StepNumber}: Delta (Przesuw) = +{currentStep.StepDisplacement:F2} mm | Pozycja noża X = {currentStep.CutTargetX:F2} mm | Margines Lewy = {actualMarginLeft:F2} mm | Margines Prawy = {detail.MarginRight:F2} mm";
+        RunTitle.Text = $"KROK {currentStep.StepNumber}: Delta (Przesuw) = +{currentStep.StepDisplacement:F2} mm | Pozycja noża X = {currentStep.CutTargetX:F2} mm | Margines Lewy = {detail.MarginLeft:F2} mm | Margines Prawy = {actualMarginRight:F2} mm";
 
         // NIEBIESKI NAGŁÓWEK
         RunDetails.Text = $"INFO: {currentStep.Info} | Liczba aktywnych stempli: {activePunchesCount} | STEMPLE (Mask): {currentStep.PunchesMask}";
@@ -99,11 +99,11 @@ public partial class StepVisualizerControl : UserControl
         for (int i = 0; i < machine.MaxPunches; i++)
         {
             bool isActive = (currentStep.PunchesMask & (1u << i)) != 0;
-            bool isSerrationZone = machine.EnableSerration && i < 16;
+            bool isSerrationZone = machine.EnableSerration && i < machine.SerrationMaxPunches;
 
             double punchMachineX = (i - machine.MachineCenterIndex) * machine.Pitch;
             double punchCanvasX = GetCanvasX(punchMachineX);
-            double punchWidth = isSerrationZone ? machine.SerrationWidth : machine.PunchWidth;
+            double punchWidth = 2;//isSerrationZone ? machine.SerrationWidth : machine.PunchWidth;
 
             // Narzędzie seratacji rysujemy na zielono, standardowe na czerwono
             Brush activeBrush = isSerrationZone ? Brushes.LimeGreen : Brushes.Red;
@@ -112,7 +112,7 @@ public partial class StepVisualizerControl : UserControl
             var punchShape = new Rectangle
             {
                 Width = punchWidth,
-                Height = 30,
+                Height = 40,
                 RadiusX = 2,
                 RadiusY = 2,
                 Fill = isActive ? activeBrush : Brushes.WhiteSmoke,
@@ -183,6 +183,29 @@ public partial class StepVisualizerControl : UserControl
                 Canvas.SetLeft(kerfRect, cutLeftCanvas);
                 Canvas.SetTop(kerfRect, AxisY - 60);
                 DrawingCanvas.Children.Add(kerfRect);
+
+                // Etykieta pozycji rzazu na osi X
+                // 1. Obliczamy idealny środek szczeliny w układzie współrzędnych maszyny
+                double gapCenterMachineX = (gapRightMachineX + gapLeftMachineX) / 2.0;
+                double gapCenterCanvasX = GetCanvasX(gapCenterMachineX);
+
+                var gapLabel = new TextBlock
+                {
+                    Text = gapCenterMachineX.ToString("F2"),
+                    FontSize = 20,
+                    Foreground = Brushes.DimGray,
+                    FontWeight = FontWeights.Bold
+                };
+
+                // 2. Wymuszamy przeliczenie rozmiaru tekstu, aby precyzyjnie wyśrodkować go pod szczeliną
+                gapLabel.Measure(new Size(Double.PositiveInfinity, Double.PositiveInfinity));
+                Canvas.SetLeft(gapLabel, gapCenterCanvasX - (gapLabel.DesiredSize.Width / 2.0));
+
+                // 3. Pozycjonujemy tekst na AxisY + 40 (główne etykiety osi są na +10, więc ten tekst będzie pod nimi)
+                Canvas.SetTop(gapLabel, AxisY + 40);
+
+                DrawingCanvas.Children.Add(gapLabel);
+                // --------------------------------------------------
             }
         }
 
@@ -203,7 +226,7 @@ public partial class StepVisualizerControl : UserControl
 
                     if (holeCanvasX >= backCanvasX && holeCanvasX <= frontCanvasX)
                     {
-                        bool isSerrationZone = machine.EnableSerration && i < 16;
+                        bool isSerrationZone = machine.EnableSerration && i < machine.SerrationMaxPunches;
 
                         if (isSerrationZone)
                         {
@@ -278,7 +301,7 @@ public partial class StepVisualizerControl : UserControl
             // Powiększony, czytelniejszy tekst celownika (FontSize = 20)
             var standbyText = new TextBlock
             {
-                Text = $"CEL NOŻA (X: {knifeCenterMachineX:F1})",
+                Text = $"CEL NOŻA (X: {knifeCenterMachineX:F2})",
                 Foreground = Brushes.Gray,
                 FontSize = 20,
                 FontWeight = FontWeights.SemiBold

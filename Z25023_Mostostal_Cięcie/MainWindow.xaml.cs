@@ -26,12 +26,30 @@ namespace Z25023_Mostostal_Cięcie
         public MainWindow()
         {
             InitializeComponent();
+            var culture = new CultureInfo("pl-PL");
+            this.Language = System.Windows.Markup.XmlLanguage.GetLanguage("pl-PL");
+
+            try
+            {
+                // Ładowanie fizycznych parametrów gilotyny z zewnętrznego pliku JSON
+                var machineConfig = MachineConfig.Load();
+
+                //Wpisanie domyślnych wartości do pól interfejsu (z użyciem przecinka)
+                txtShearMin.Text = machineConfig.ShearMin.ToString("F1", culture);
+                txtShearMax.Text = machineConfig.ShearMax.ToString("F1", culture);
+            }
+            catch (Exception ex)
+            {
+                //Zabezpieczenie awaryjne, gdyby plik JSON był zablokowany lub uszkodzony
+                txtShearMin.Text = "1850,7";
+                txtShearMax.Text = "2650,7";
+            }
         }
 
         // Nowy konstruktor przyjmujący parametry z zewnątrz (z projektu głównego)
         public MainWindow(double length, double pitch, double marginLeft, double marginRight, bool isSerration) : this()
         {
-            var culture = System.Globalization.CultureInfo.InvariantCulture;
+            var culture = new CultureInfo("pl-PL");
 
             // Wypełniamy formularz (wymuszając InvariantCulture dla kropek w ułamkach)
             txtLength.Text = length.ToString(culture);
@@ -82,7 +100,7 @@ namespace Z25023_Mostostal_Cięcie
                 CadVisualizer.DrawingCanvas.Children.Clear(); 
 
                 // 1. Bezpieczne parsowanie parametrów wejściowych (wymuszamy kropkę jako separator dziesiętny)
-                var culture = CultureInfo.InvariantCulture;
+                var culture = new CultureInfo("pl-PL");
 
                 double length = double.Parse(txtLength.Text, culture);
                 double marginLeft = double.Parse(txtMarginLeft.Text, culture);
@@ -100,11 +118,12 @@ namespace Z25023_Mostostal_Cięcie
                 bool isSerrationEnabled = chkEnableSerration.IsChecked ?? false;
 
                 // 2. Inicjalizacja konfiguracji (Z uwzględnieniem CheckBoxa)
-                var machineConfig = new MachineConfig(
-                    ShearMin: shearMin,
-                    ShearMax: shearMax,
-                    EnableSerration: isSerrationEnabled
-                );
+                var machineConfig = MachineConfig.Load() with
+                {
+                    ShearMin = shearMin,
+                    ShearMax = shearMax,
+                    EnableSerration = isSerrationEnabled
+                };
                 var detailConfig = new DetailConfig(length, marginLeft, marginRight, pitch);
 
                 var logic = new ProductionLogic(machineConfig);
@@ -202,7 +221,7 @@ namespace Z25023_Mostostal_Cięcie
             }
             catch (FormatException)
             {
-                MessageBox.Show("Błąd formatu danych. Upewnij się, że używasz wartości liczbowych (np. z kropką dziesiętną).",
+                MessageBox.Show("Błąd formatu danych. Upewnij się, że używasz wartości liczbowych (np. z przecinkiem dziesiętnym).",
                                 "Błąd Walidacji", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
             catch (Exception ex)
@@ -228,7 +247,12 @@ namespace Z25023_Mostostal_Cięcie
             double marginL = 29.55;
             double marginR = 29.55;
 
-            var machineConfig = new MachineConfig(ShearMin: 1850.7, ShearMax: 2650.7, EnableSerration: true);
+            var machineConfig = MachineConfig.Load() with
+            {
+                ShearMin = 1850.7,
+                ShearMax = 2650.7,
+                EnableSerration = true
+            };
             var logic = new ProductionLogic(machineConfig);
 
             int counter = 0;

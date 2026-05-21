@@ -4,6 +4,7 @@
              xmlns:local="clr-namespace:Z25023_Mostostal_Cięcie"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-         
+
+
     </Application.Resources>
 </Application>

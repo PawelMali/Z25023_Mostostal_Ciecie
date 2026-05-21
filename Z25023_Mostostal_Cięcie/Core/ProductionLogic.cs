@@ -105,9 +105,20 @@ public class ProductionLogic
         int numberOfIntervals = (int)Math.Floor(availableLength / detail.HolePitch);
         int numberOfHoles = numberOfIntervals + 1;
 
+        //for (int i = 0; i < numberOfHoles; i++)
+        //{
+        //    positions.Add(centerMarginRight + (i * detail.HolePitch));
+        //}
+
+        // NOWA LOGIKA: Baza odwrócona. Sztywny jest lewy margines (na końcu detalu względem kierunku X maszyny).
+        // Najbardziej lewy otwór znajdzie się na pozycji: (Length - MarginLeft).
+        // Najpierw wyliczamy, o ile musi przesunąć się prawy margines, by przejąć całą resztę (remainder).
+        double actualMarginRight = detail.Length - centerMarginLeft - (numberOfIntervals * detail.HolePitch);
+
         for (int i = 0; i < numberOfHoles; i++)
         {
-            positions.Add(centerMarginRight + (i * detail.HolePitch));
+            // Startujemy od wyliczonego, powiększonego prawego marginesu
+            positions.Add(actualMarginRight + (i * detail.HolePitch));
         }
 
         return positions;
@@ -130,29 +141,30 @@ public class ProductionLogic
 
             if (_machine.EnableSerration)
             {
-                // STREFA 1: SERATACJA (Indeksy 0 - 15)
+                // STREFA 1: SERATACJA (Indeksy dynamiczne pobrane z pliku konfiguracyjnego)
                 List<double> serrationHoles = CalculateSerrationPositions(detail, standardHoles);
-                int effSerration = GetEffectiveMaxPunches(11.1, 16);
+                int effSerration = GetEffectiveMaxPunches(_machine.SerrationPitch, _machine.SerrationMaxPunches);
 
-                // UWAGA KINEMATYCZNA: Seratacja jest niezależna od gilotyny, używa wymuszenia = 0, aby sama wyliczyła bezpieczne pakiety.
                 List<int> serrChunkSizes = CalculateBalancedChunks(serrationHoles.Count, effSerration, 0);
                 int sHoleIndex = 0;
                 foreach (int chunkSize in serrChunkSizes)
                 {
-                    var passes = CalculatePassesForChunk(serrationHoles.GetRange(sHoleIndex, chunkSize), 11.1, 0, 15);
+                    // Elastyczny zakres: od 0 do (SerrationMaxPunches - 1)
+                    var passes = CalculatePassesForChunk(serrationHoles.GetRange(sHoleIndex, chunkSize), _machine.SerrationPitch, 0, _machine.SerrationMaxPunches - 1);
                     foreach (var p in passes) allGlobalPasses.Add((p, absoluteDetailFrontX));
                     sHoleIndex += chunkSize;
                 }
 
-                // STREFA 2: STANDARD (Indeksy 16 - 31)
-                int effStandard = GetEffectiveMaxPunches(detail.HolePitch, 16);
+                // STREFA 2: STANDARD
+                int availableStandardPunches = _machine.MaxPunches - _machine.SerrationMaxPunches;
+                int effStandard = GetEffectiveMaxPunches(detail.HolePitch, availableStandardPunches);
 
-                // UWAGA KINEMATYCZNA: Strefa 2 jest sztywno połączona z gilotyną. Słucha nakazu 'forcedChunks'.
                 List<int> stdChunkSizes = CalculateBalancedChunks(standardHoles.Count, effStandard, forcedChunks);
                 int stdHoleIndex = 0;
                 foreach (int chunkSize in stdChunkSizes)
                 {
-                    var passes = CalculatePassesForChunk(standardHoles.GetRange(stdHoleIndex, chunkSize), detail.HolePitch, 16, 31);
+                    // Elastyczny zakres: od SerrationMaxPunches do (MaxPunches - 1)
+                    var passes = CalculatePassesForChunk(standardHoles.GetRange(stdHoleIndex, chunkSize), detail.HolePitch, _machine.SerrationMaxPunches, _machine.MaxPunches - 1);
                     foreach (var p in passes) allGlobalPasses.Add((p, absoluteDetailFrontX));
                     stdHoleIndex += chunkSize;
                 }
@@ -349,7 +361,7 @@ public class ProductionLogic
     {
         List<double> holePositions = CalculateHolePositions(detail);
 
-        int minPunch = _machine.EnableSerration ? 16 : 0;
+        int minPunch = _machine.EnableSerration ? _machine.SerrationMaxPunches : 0;
         int maxPunch = _machine.MaxPunches - 1;
         int availablePunches = maxPunch - minPunch + 1;
 
@@ -470,35 +482,31 @@ public class ProductionLogic
         double anchorLast = standardPositions.Last();
         double radius = _machine.SerrationWidth / 2.0;
 
-        // 1. Ośrodek Seratacji: Wypełnienie między skrajnymi otworami ze stałym skokiem i offsetem
-        double pos = anchorFirst + 5.55;
+        // 1. Ośrodek Seratacji (użycie konfiguracji z pliku)
+        double pos = anchorFirst + _machine.SerrationOffset;
         while (pos < anchorLast)
         {
             serrations.Add(pos);
-            pos += 11.1;
+            pos += _machine.SerrationPitch;
         }
 
-        // 2. Seratacje na prawym marginesie (Czoło)
-        // Ilość bezpiecznych uderzeń wg logiki warsztatowej
-        int rightSerrationsCount = (int)Math.Floor(detail.MarginRight / 11.1);
-        pos = anchorFirst - 5.55;
+        // 2. Seratacje na prawym marginesie
+        int rightSerrationsCount = (int)Math.Floor(anchorFirst / _machine.SerrationPitch);
+        pos = anchorFirst - _machine.SerrationOffset;
 
         for (int i = 0; i < rightSerrationsCount; i++)
         {
-            if (pos >= radius) // Zabezpieczenie promienia fizycznego noża seratacji
+            if (pos >= radius)
             {
                 serrations.Add(pos);
             }
-            pos -= 11.1;
+            pos -= _machine.SerrationPitch;
         }
 
-        // 3. Seratacje na lewym marginesie (Tył detalu)
-
-
-        // Faktyczna bezpieczna blacha po uwzględnieniu noża otworu standardowego
+        // 3. Seratacje na lewym marginesie
         double actualMarginLeft = detail.Length - anchorLast;
-        int leftSerrationsCount = (int)Math.Floor(actualMarginLeft / 11.1);
-        pos = anchorLast + 5.55;
+        int leftSerrationsCount = (int)Math.Floor(actualMarginLeft / _machine.SerrationPitch);
+        pos = anchorLast + _machine.SerrationOffset;
 
         for (int i = 0; i < leftSerrationsCount; i++)
         {
@@ -506,7 +514,7 @@ public class ProductionLogic
             {
                 serrations.Add(pos);
             }
-            pos += 11.1;
+            pos += _machine.SerrationPitch;
         }
 
         var list = serrations.ToList();

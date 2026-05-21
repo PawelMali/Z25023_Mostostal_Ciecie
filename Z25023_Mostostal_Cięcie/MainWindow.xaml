@@ -5,7 +5,6 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:Z25023_Mostostal_Cięcie"
         xmlns:ui="clr-namespace:Z25023_Mostostal_Cięcie.UI"
-        xmlns:sp="clr-namespace:ScottPlot.WPF;assembly=ScottPlot.WPF" 
         mc:Ignorable="d"
         Title="Symulator Prasy Wykrawającej - Hybrid Multistep" Height="768" Width="1024"
         WindowStartupLocation="CenterScreen">
@@ -22,20 +21,20 @@
                 <TextBlock Text="Parametry Detalu" FontWeight="Bold" FontSize="16" Margin="0,0,0,15" Foreground="#333"/>
 
                 <TextBlock Text="Długość (L) [mm]:" Margin="0,0,0,5"/>
-                <TextBox Name="txtLength" Text="993.0" Margin="0,0,0,10" Padding="4"/>
+                <TextBox Name="txtLength" Text="993,0" Margin="0,0,0,10" Padding="4"/>
 
                 <TextBlock Text="Skok (P) [mm]:" Margin="0,0,0,5"/>
                 <ComboBox Name="cmbPitch" Margin="0,0,0,10" Padding="4">
-                    <ComboBoxItem Content="11.1" />
-                    <ComboBoxItem Content="22.2" />
-                    <ComboBoxItem Content="33.3" IsSelected="True" />
-                    <ComboBoxItem Content="44.4" />
-                    <ComboBoxItem Content="55.5" />
-                    <ComboBoxItem Content="66.6" />
-                    <ComboBoxItem Content="77.7" />
-                    <ComboBoxItem Content="88.8" />
-                    <ComboBoxItem Content="99.9" />
-                    <!--<ComboBoxItem Content="122.1" />-->
+                    <ComboBoxItem Content="11,1" />
+                    <ComboBoxItem Content="22,2" />
+                    <ComboBoxItem Content="33,3" IsSelected="True" />
+                    <ComboBoxItem Content="44,4" />
+                    <ComboBoxItem Content="55,5" />
+                    <ComboBoxItem Content="66,6" />
+                    <ComboBoxItem Content="77,7" />
+                    <ComboBoxItem Content="88,8" />
+                    <ComboBoxItem Content="99,9" />
+                    <!--<ComboBoxItem Content="122,1" />-->
                 </ComboBox>
 
                 <TextBlock Text="Opcje technologiczne:" Margin="0,15,0,5" FontWeight="SemiBold"/>
@@ -48,11 +47,11 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Margin="0,0,5,0">
                         <TextBlock Text="Margines L:" Margin="0,0,0,5"/>
-                        <TextBox Name="txtMarginLeft" Text="30.3" Padding="4"/>
+                        <TextBox Name="txtMarginLeft" Text="30,3" Padding="4"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1" Margin="5,0,0,0">
                         <TextBlock Text="Margines P:" Margin="0,0,0,5"/>
-                        <TextBox Name="txtMarginRight" Text="30.3" Padding="4"/>
+                        <TextBox Name="txtMarginRight" Text="30,3" Padding="4"/>
                     </StackPanel>
                 </Grid>
 
@@ -67,11 +66,11 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Margin="0,0,5,0">
                         <TextBlock Text="Min [mm]:" Margin="0,0,0,5"/>
-                        <TextBox Name="txtShearMin" Text="1850.7" Padding="4"/>
+                        <TextBox Name="txtShearMin" Text="1850,7" Padding="4"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1" Margin="5,0,0,0">
                         <TextBlock Text="Max [mm]:" Margin="0,0,0,5"/>
-                        <TextBox Name="txtShearMax" Text="2650.7" Padding="4"/>
+                        <TextBox Name="txtShearMax" Text="2650,7" Padding="4"/>
                     </StackPanel>
                 </Grid>
 
@@ -108,7 +107,7 @@
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="KROK" Binding="{Binding StepNumber}" Width="60"/>
 
-                            <DataGridTextColumn Header="PRZESUW Δ (mm)" Binding="{Binding StepDisplacement, StringFormat={}{0:F2}}" Width="120">
+                            <DataGridTextColumn Header="PRZESUW Δ (mm)" Binding="{Binding StepDisplacement, StringFormat={}{0:N2}}" Width="120">
                                 <DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="FontWeight" Value="Bold"/>
@@ -116,9 +115,9 @@
                                 </DataGridTextColumn.ElementStyle>
                             </DataGridTextColumn>
 
-                            <DataGridTextColumn Header="ABS X (mm)" Binding="{Binding Delta, StringFormat={}{0:F2}}" Width="100" Foreground="Gray"/>
+                            <DataGridTextColumn Header="ABS X (mm)" Binding="{Binding Delta, StringFormat={}{0:N2}}" Width="100" Foreground="Gray"/>
 
-                            <DataGridTextColumn Header="OŚ NOŻA (mm)" Binding="{Binding CutTargetX, StringFormat={}{0:F2}}" Width="120" Foreground="Magenta"/>
+                            <DataGridTextColumn Header="OŚ NOŻA (mm)" Binding="{Binding CutTargetX, StringFormat={}{0:N2}}" Width="120" Foreground="Magenta"/>
 
                             <DataGridCheckBoxColumn Header="CIĘCIE" Binding="{Binding IsCutActive}" Width="70"/>
 
@@ -139,7 +138,7 @@
                             <TextBlock Text="Powiększenie schematu:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,10,0"/>
                             <Slider x:Name="ZoomSlider" Minimum="0.1" Maximum="2.0" Value="0.5" Width="200" 
                                     VerticalAlignment="Center" TickFrequency="0.1" IsSnapToTickEnabled="True" TickPlacement="BottomRight"/>
-                            <TextBlock Text="{Binding Value, ElementName=ZoomSlider, StringFormat=\{0:F1\}x}" 
+                            <TextBlock Text="{Binding Value, ElementName=ZoomSlider, StringFormat=\{0:N1\}x}" 
                                        VerticalAlignment="Center" Margin="10,0,0,0" FontWeight="Bold" Foreground="#005A9E"/>
                         </StackPanel>
 
@@ -180,8 +179,8 @@
                                   CanUserSortColumns="False" AlternatingRowBackground="#F9F9F9" GridLinesVisibility="Horizontal">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="KROK PĘTLI" Binding="{Binding LoopIndex}" FontWeight="Bold"/>
-                                <DataGridTextColumn Header="PRZESUW W PĘTLI (mm)" Binding="{Binding StandardDisplacement, StringFormat=\{0:F2\}}" Foreground="DarkGreen" FontWeight="Bold"/>
-                                <DataGridTextColumn Header="PRZESUW STARTOWY (mm)" Binding="{Binding StartupDisplacement, StringFormat=\{0:F2\}}" Foreground="Gray"/>
+                                <DataGridTextColumn Header="PRZESUW W PĘTLI (mm)" Binding="{Binding StandardDisplacement, StringFormat=\{0:N2\}}" Foreground="DarkGreen" FontWeight="Bold"/>
+                                <DataGridTextColumn Header="PRZESUW STARTOWY (mm)" Binding="{Binding StartupDisplacement, StringFormat=\{0:N2\}}" Foreground="Gray"/>
                                 <DataGridCheckBoxColumn Header="CIĘCIE" Binding="{Binding IsCutActive}"/>
                                 <DataGridTextColumn Header="STEMPLE (MASK)" Binding="{Binding PunchesMask}"/>
                                 <DataGridTextColumn Header="INFO" Binding="{Binding Info}"/>
