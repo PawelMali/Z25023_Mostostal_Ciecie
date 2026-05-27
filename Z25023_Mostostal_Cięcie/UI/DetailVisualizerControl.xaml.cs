@@ -30,7 +30,7 @@ public partial class DetailVisualizerControl : UserControl
         }
     }
 
-    public void RenderCAD(DetailConfig detail, MachineConfig machine, List<double> standardHoles, List<double> serrationHoles)
+    public void RenderCAD(DetailConfig detail, MachineConfig machine, List<double> standardHoles, List<double> serrationHoles, int stepsCount)
     {
         DrawingCanvas.Children.Clear();
         DrawingCanvas.Width = detail.Length + 200; // Dopasowanie płótna do długości detalu
@@ -46,17 +46,60 @@ public partial class DetailVisualizerControl : UserControl
         // ==========================================
         // 1. RYSOWANIE MATERIAŁU (Styl CAD: Szare tło, czarny obrys)
         // ==========================================
-        var materialBar = new Rectangle
+        // ==========================================
+        // 1. RYSOWANIE MATERIAŁU (Styl CAD: Szare tło, czarny obrys)
+        // Z wykorzystaniem wielokąta (Polygon) dla dynamicznego profilu krawędzi
+        // ==========================================
+        var materialPoints = new PointCollection();
+
+        if (detail.Type == CuttingType.T)
         {
-            Width = detail.Length,
-            Height = BarHeight,
+            // Parametry wcięcia typu T (odczytane z dokumentacji narzędzia):
+            double topOffset = 4.5;         // Dystans od górnej krawędzi
+            double notchHeight = 3.5;       // Wysokość szczeliny
+            double notchDepth = 11.5;       // Głębokość wcięcia od zera detalu
+            double topBracketIndent = 2.5;  // Skrócenie górnego wspornika
+
+            double notchTopY = BarY + topOffset;
+            double notchBottomY = notchTopY + notchHeight;
+
+            // LEWA KRAWĘDŹ (Rysowana od lewego górnego rogu w dół)
+            materialPoints.Add(new Point(OffsetX + topBracketIndent, BarY));                 // 1. Top wspornika
+            materialPoints.Add(new Point(OffsetX + topBracketIndent, notchTopY));            // 2. Zejście do wcięcia
+            materialPoints.Add(new Point(OffsetX + notchDepth, notchTopY));                  // 3. Wejście w głąb (11.5mm)
+            materialPoints.Add(new Point(OffsetX + notchDepth, notchBottomY));               // 4. Dno wcięcia (3.5mm)
+            materialPoints.Add(new Point(OffsetX, notchBottomY));                            // 5. Powrót do głównej krawędzi (Zero)
+            materialPoints.Add(new Point(OffsetX, BarY + BarHeight));                        // 6. Lewy dolny róg
+
+            // PRAWA KRAWĘDŹ (Rysowana od prawego dolnego rogu w górę - lustrzane odbicie)
+            double rightEdgeX = OffsetX + detail.Length;
+            materialPoints.Add(new Point(rightEdgeX, BarY + BarHeight));                     // 7. Prawy dolny róg
+            materialPoints.Add(new Point(rightEdgeX, notchBottomY));                         // 8. Krawędź do wcięcia
+            materialPoints.Add(new Point(rightEdgeX - notchDepth, notchBottomY));            // 9. Wejście w głąb (11.5mm)
+            materialPoints.Add(new Point(rightEdgeX - notchDepth, notchTopY));               // 10. Dno wcięcia w górę
+            materialPoints.Add(new Point(rightEdgeX - topBracketIndent, notchTopY));         // 11. Powrót do wspornika
+            materialPoints.Add(new Point(rightEdgeX - topBracketIndent, BarY));              // 12. Prawy górny róg
+        }
+        else
+        {
+            // TYP P - Klasyczne, proste krawędzie (Prostokąt)
+            materialPoints.Add(new Point(OffsetX, BarY));
+            materialPoints.Add(new Point(OffsetX, BarY + BarHeight));
+            materialPoints.Add(new Point(OffsetX + detail.Length, BarY + BarHeight));
+            materialPoints.Add(new Point(OffsetX + detail.Length, BarY));
+        }
+
+        // Generowanie figury
+        var materialPolygon = new Polygon
+        {
+            Points = materialPoints,
             Fill = new SolidColorBrush(Color.FromRgb(200, 200, 200)), // Techniczny jasny szary
             Stroke = Brushes.Black,
-            StrokeThickness = 1.5
+            StrokeThickness = 1.5,
+            StrokeLineJoin = PenLineJoin.Miter // Wyostrza kąty proste
         };
-        Canvas.SetLeft(materialBar, OffsetX);
-        Canvas.SetTop(materialBar, BarY);
-        DrawingCanvas.Children.Add(materialBar);
+
+        DrawingCanvas.Children.Add(materialPolygon);
 
         // ==========================================
         // 2. OTORY STANDARDOWE I OSIE SYMETRII
@@ -200,6 +243,39 @@ public partial class DetailVisualizerControl : UserControl
                 DrawDimensionLine(firstSerrX, lastSerrX, BarY - 65, BarY, $"{serrGaps} x {machine.SerrationPitch:F1} = {serrGaps * machine.SerrationPitch:F1}");
             }
         }
+
+        // ==========================================
+        // 5. METRYKI PRODUKCYJNE (NOWOŚĆ)
+        // Rysujemy blok informacyjny w stylu metryki rysunkowej CAD
+        // ==========================================
+        double totalProductionTime = stepsCount * machine.CycleTimeSeconds;
+
+        var timeInfoTextBlock = new TextBlock
+        {
+            Text = $"METRYKA PRODUKCJI DETALU:\n" +
+                   $"• Wymagane kroki (cykle): {stepsCount}\n" +
+                   $"• Takt prasy (krok): {machine.CycleTimeSeconds:F2} s\n" +
+                   $"• Szacowany czas wykonania: {totalProductionTime:F2} s",
+            FontSize = 13,
+            FontWeight = FontWeights.Bold,
+            Foreground = Brushes.DarkSlateGray,
+            Padding = new Thickness(12),
+            FontStyle = FontStyles.Italic
+        };
+
+        var timeInfoBorder = new Border
+        {
+            Child = timeInfoTextBlock,
+            Background = new SolidColorBrush(Color.FromArgb(25, 0, 90, 158)), // Delikatne niebieskawe tło technologiczne
+            BorderBrush = new SolidColorBrush(Color.FromRgb(182, 212, 234)),
+            BorderThickness = new Thickness(1)
+        };
+
+        // Pozycjonujemy blok wysoko nad rysunkiem i górnymi wymiarami (wymiary górne kończą się na ok. BarY - 65)
+        Canvas.SetLeft(timeInfoBorder, 10);
+        Canvas.SetTop(timeInfoBorder, BarY - 190);
+
+        DrawingCanvas.Children.Add(timeInfoBorder);
     }
 
     /// <summary>

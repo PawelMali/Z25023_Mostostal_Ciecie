@@ -47,7 +47,7 @@ namespace Z25023_Mostostal_Cięcie
         }
 
         // Nowy konstruktor przyjmujący parametry z zewnątrz (z projektu głównego)
-        public MainWindow(double length, double pitch, double marginLeft, double marginRight, bool isSerration) : this()
+        public MainWindow(double length, double pitch, double marginLeft, double marginRight, bool isSerration, int cuttingType) : this()
         {
             var culture = new CultureInfo("pl-PL");
 
@@ -57,6 +57,14 @@ namespace Z25023_Mostostal_Cięcie
             txtMarginRight.Text = marginRight.ToString(culture);
 
             chkEnableSerration.IsChecked = isSerration;
+
+            //Przypisanie odebranego typu bezpośrednio do UI
+
+            cmbCuttingType.SelectedIndex =
+                (cuttingType == 1 || cuttingType == 3 || cuttingType == 4 || cuttingType == 5)
+                ? 0
+                : 1;
+
 
             // Zabezpieczenie (Best Practice): Szukamy podziałki w ComboBoxie. 
             // Jeśli PLC przyśle niestandardową (np. 15.5), dodamy ją dynamicznie, by nie wywalić aplikacji.
@@ -113,6 +121,10 @@ namespace Z25023_Mostostal_Cięcie
                 var selectedPitchItem = (ComboBoxItem)cmbPitch.SelectedItem;
                 double pitch = double.Parse(selectedPitchItem.Content.ToString()!, culture);
 
+                // Pobranie wybranego typu cięcia z kontrolki ComboBox
+                var selectedTypeItem = (ComboBoxItem)cmbCuttingType.SelectedItem;
+                CuttingType cuttingType = selectedTypeItem.Tag.ToString() == "P" ? CuttingType.P : CuttingType.T;
+
                 // 2. Inicjalizacja konfiguracji (Z uwzględnieniem trybu Progresywnego / Seratacji)
                 // Pobranie stanu seratacji z nowego CheckBoxa na HMI
                 bool isSerrationEnabled = chkEnableSerration.IsChecked ?? false;
@@ -124,7 +136,7 @@ namespace Z25023_Mostostal_Cięcie
                     ShearMax = shearMax,
                     EnableSerration = isSerrationEnabled
                 };
-                var detailConfig = new DetailConfig(length, marginLeft, marginRight, pitch);
+                var detailConfig = new DetailConfig(length, marginLeft, marginRight, pitch, cuttingType);
 
                 var logic = new ProductionLogic(machineConfig);
 
@@ -177,6 +189,7 @@ namespace Z25023_Mostostal_Cięcie
                             StartupDisplacement: startDisp,
                             IsCutActive: step.IsCutActive,
                             PunchesMask: step.PunchesMask,
+                            CutTargetX: step.CutTargetX,
                             Info: step.Info
                         ));
                     }
@@ -215,8 +228,13 @@ namespace Z25023_Mostostal_Cięcie
                     serrHoles = logic.CalculateSerrationPositions(detailConfig, stdHoles);
                 }
 
+                // Inteligentne określenie liczby kroków dla JEDNEGO detalu
+                // Wykorzystujemy wielkość zgeneralizowanej pętli ustalonej. 
+                // Jeśli jej brak, dzielimy całkowitą liczbę kroków przez liczbę zasymulowanych sztuk (4).
+                int stepsPerDetail = steadyStateSteps != null ? steadyStateSteps.Count : (allSteps.Count / 4);
+
                 // Przekazujemy to do kontrolki umieszczonej w nowej zakładce
-                CadVisualizer.RenderCAD(detailConfig, machineConfig, stdHoles, serrHoles);
+                CadVisualizer.RenderCAD(detailConfig, machineConfig, stdHoles, serrHoles, stepsPerDetail);
 
             }
             catch (FormatException)
@@ -229,13 +247,6 @@ namespace Z25023_Mostostal_Cięcie
                 MessageBox.Show($"Wystąpił nieoczekiwany błąd podczas symulacji:\n{ex.Message}",
                                 "Błąd Krytyczny", MessageBoxButton.OK, MessageBoxImage.Error);
             }
-        }
-
-        private void CompareCodeButton_Click(object sender, RoutedEventArgs e)
-        {
-            // TODO: Wywołanie nowego okna edukacyjnego z porównaniem kodu C# i Siemens SCL
-            MessageBox.Show("Moduł edukacyjny (Porównanie C# vs PLC) w trakcie przygotowania.",
-                            "Informacja", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
         private void RunFuzzTestButton_Click(object sender, RoutedEventArgs e)
@@ -264,7 +275,7 @@ namespace Z25023_Mostostal_Cięcie
                 {
                     try
                     {
-                        var detailConfig = new DetailConfig(len, marginL, marginR, pitch);
+                        var detailConfig = new DetailConfig(len, marginL, marginR, pitch, CuttingType.P);
 
                         int optimalChunks;
                         double knifePos = logic.CalculateOptimalKnifePosition(detailConfig, out optimalChunks);

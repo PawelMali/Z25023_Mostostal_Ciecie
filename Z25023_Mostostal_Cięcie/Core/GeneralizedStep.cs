@@ -11,6 +11,7 @@ public record GeneralizedStep(
     int LoopIndex,
     double StandardDisplacement,
     double StartupDisplacement,
+    double CutTargetX,        //Współrzędna osi noża (środek ostrza)
     bool IsCutActive,
     uint PunchesMask,
     string Info

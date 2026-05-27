@@ -433,7 +433,9 @@ public class ProductionLogic
         if (FindRationalRatio(ratio, out int A, out int B))
         {
             if (A == 0) A = 1;
-            int punchesPerHit = Math.Max(1, availablePunches / A);
+            int maxIntervals = (availablePunches - 1) / A;
+            int punchesPerHit = maxIntervals + 1;
+
             return punchesPerHit * B;
         }
         return availablePunches;
@@ -490,8 +492,31 @@ public class ProductionLogic
             pos += _machine.SerrationPitch;
         }
 
+        // =================================================================
+        // NOWY ALGORYTM: Dynamiczne wyliczanie ilości na podstawie Typu P / T
+        // =================================================================
+        double actualMarginRight = anchorFirst; //
+        double actualMarginLeft = detail.Length - anchorLast; //
+
+        int rightSerrationsCount = 0;
+        int leftSerrationsCount = 0;
+
+        if (detail.Type == CuttingType.P)
+        {
+            // Reguła dla typu P (Próg bazowy 10, krok 11.1)
+            rightSerrationsCount = actualMarginRight < 10.0 ? 0 : (int)Math.Floor((actualMarginRight - 10.0) / _machine.SerrationPitch) + 1;
+            leftSerrationsCount = actualMarginLeft < 10.0 ? 0 : (int)Math.Floor((actualMarginLeft - 10.0) / _machine.SerrationPitch) + 1;
+        }
+        else // CuttingType.T
+        {
+            // Reguła dla typu T (Próg bazowy 20.5, krok 11.1)
+            rightSerrationsCount = actualMarginRight < 20.5 ? 0 : (int)Math.Floor((actualMarginRight - 20.5) / _machine.SerrationPitch) + 1;
+            leftSerrationsCount = actualMarginLeft < 20.5 ? 0 : (int)Math.Floor((actualMarginLeft - 20.5) / _machine.SerrationPitch) + 1;
+        }
+
+
         // 2. Seratacje na prawym marginesie
-        int rightSerrationsCount = (int)Math.Floor(anchorFirst / _machine.SerrationPitch);
+        //int rightSerrationsCount = (int)Math.Floor(anchorFirst / _machine.SerrationPitch);
         pos = anchorFirst - _machine.SerrationOffset;
 
         for (int i = 0; i < rightSerrationsCount; i++)
@@ -504,8 +529,8 @@ public class ProductionLogic
         }
 
         // 3. Seratacje na lewym marginesie
-        double actualMarginLeft = detail.Length - anchorLast;
-        int leftSerrationsCount = (int)Math.Floor(actualMarginLeft / _machine.SerrationPitch);
+        //double actualMarginLeft = detail.Length - anchorLast;
+        //int leftSerrationsCount = (int)Math.Floor(actualMarginLeft / _machine.SerrationPitch);
         pos = anchorLast + _machine.SerrationOffset;
 
         for (int i = 0; i < leftSerrationsCount; i++)

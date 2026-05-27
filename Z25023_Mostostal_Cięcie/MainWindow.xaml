@@ -40,6 +40,12 @@
                 <TextBlock Text="Opcje technologiczne:" Margin="0,15,0,5" FontWeight="SemiBold"/>
                 <CheckBox x:Name="chkEnableSerration" Content="Włącz Seratację (Tryb Progresywny)" IsChecked="False" Margin="0,0,0,15" FontWeight="Bold" Foreground="DarkGreen" />
 
+                <TextBlock Text="Typ profilu matrycy (Cięcie):" Margin="0,5,0,5" FontWeight="SemiBold"/>
+                <ComboBox Name="cmbCuttingType" Margin="0,0,0,10" Padding="4">
+                    <ComboBoxItem Content="Typ P (TFT 1, 3, 4, 5)" Tag="P" IsSelected="True"/>
+                    <ComboBoxItem Content="Typ T (TFT 2, 6)" Tag="T"/>
+                </ComboBox>
+
                 <Grid Margin="0,0,0,15">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
@@ -181,6 +187,7 @@
                                 <DataGridTextColumn Header="KROK PĘTLI" Binding="{Binding LoopIndex}" FontWeight="Bold"/>
                                 <DataGridTextColumn Header="PRZESUW W PĘTLI (mm)" Binding="{Binding StandardDisplacement, StringFormat=\{0:N2\}}" Foreground="DarkGreen" FontWeight="Bold"/>
                                 <DataGridTextColumn Header="PRZESUW STARTOWY (mm)" Binding="{Binding StartupDisplacement, StringFormat=\{0:N2\}}" Foreground="Gray"/>
+                                <DataGridTextColumn Header="OŚ NOŻA (mm)" Binding="{Binding CutTargetX, StringFormat={}{0:N2}}" Width="120" Foreground="Magenta"/>
                                 <DataGridCheckBoxColumn Header="CIĘCIE" Binding="{Binding IsCutActive}"/>
                                 <DataGridTextColumn Header="STEMPLE (MASK)" Binding="{Binding PunchesMask}"/>
                                 <DataGridTextColumn Header="INFO" Binding="{Binding Info}"/>

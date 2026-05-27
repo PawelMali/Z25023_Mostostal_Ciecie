@@ -11,8 +11,8 @@ namespace Z25023_Mostostal_Cięcie.Core;
 /// </summary>
 public record MachineConfig
 {
-    public double ShearMin { get; init; } = 1850.7; // Zakres minimalnego położenia noża cięcia, który prasa jest w stanie obsłużyć
-    public double ShearMax { get; init; } = 2650.7; // Zakres maksymalnego położenia noża cięcia, który prasa jest w stanie obsłużyć
+    public double ShearMin { get; init; } = 1906; // Zakres minimalnego położenia noża cięcia, który prasa jest w stanie obsłużyć
+    public double ShearMax { get; init; } = 2790; // Zakres maksymalnego położenia noża cięcia, który prasa jest w stanie obsłużyć
     public double BladeWidth { get; init; } = 6.0;   // Grubość noża (rzaz)
     public double Pitch { get; init; } = 33.3;       // Skok między stemplami standardowymi
     public double MachineCenterIndex { get; init; } = 15.5; // Indeks centralny maszyny
@@ -20,13 +20,17 @@ public record MachineConfig
     public double PunchWidth { get; init; } = 1.5;   // Szerokość stempla standardowego
 
     // PARAMETRY SERATACJI :
-    public bool EnableSerration { get; init; } = true;
-    public double SerrationWidth { get; init; } = 9.0;
+    public bool EnableSerration { get; init; } = false;
+    public double SerrationWidth { get; init; } = 7.0; // wielkośc oczka seratacji głownie do wizualizacji
     public double SerrationPitch { get; init; } = 11.1;     
     public int SerrationMaxPunches { get; init; } = 16;     // Liczba narzędzi w strefie seratacji
 
     // Właściwość obliczana automatycznie - brak konieczności konfiguracji przez operatora
     public double SerrationOffset => SerrationPitch / 2.0;
+
+
+    //Czas trwania jednego pełnego cyklu prasy (w sekundach)
+    public double CycleTimeSeconds { get; init; } = 2.01;
 
     /// <summary>
     /// Pobiera konfigurację z pliku machine_config.json. 
